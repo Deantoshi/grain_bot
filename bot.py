@@ -21,6 +21,7 @@ QUERY_ID_LIST = [
 
 BASE_URL = "https://api.dune.com/api/v1/"
 
+print()
 
 def make_api_url(module, action, ID):
   """
