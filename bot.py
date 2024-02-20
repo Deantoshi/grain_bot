@@ -3,8 +3,29 @@ import pandas as pd
 import time
 import discord
 import os
+import asyncio
+import json
+from functools import cache
+import threading 
+import queue
+import time
+import datetime
+from concurrent.futures import ThreadPoolExecutor
+# import gcs_updater
+from google.cloud import storage
+import google.cloud.storage
+import os
+import sys
+import io
+from io import BytesIO
 
-API_KEY = str(os.getenv("API_KEY"))
+# API_KEY = str(os.getenv("API_KEY"))
+API_KEY = ''
+
+DISCORD_TOKEN = ''
+
+BASE_COOLDOWN = 86400
+
 HEADER = {"x-dune-api-key": API_KEY}
 
 # CHANNEL_ID = 1148665283888816129  # granary liquidation-bot
@@ -21,7 +42,11 @@ QUERY_ID_LIST = [
 
 BASE_URL = "https://api.dune.com/api/v1/"
 
-print()
+PATH = os.path.join(os.getcwd(), 'ethos-redemption-bot-d4d4be30b664.json')
+# os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = PATH
+STORAGE_CLIENT = storage.Client(PATH)
+# print(STORAGE_CLIENT)
+
 
 def make_api_url(module, action, ID):
   """
@@ -454,7 +479,7 @@ def run_discord_bot():
 
   intents.messages = True
 
-  token = str(os.getenv("DISCORD_TOKEN"))
+  token = DISCORD_TOKEN
   client = discord.Client(intents=intents)
 
   #prints when the bot is running and starts run_everything
