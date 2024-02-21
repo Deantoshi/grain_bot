@@ -121,12 +121,12 @@ def cancel_query_execution(execution_id):
 
 
 #loops through our query untill it is completed
-def get_populated_results(response, execution_id, client, query_id):
+async def get_populated_results(response, execution_id, client, query_id):
   state = response.json()['state']
 
   while state != 'QUERY_STATE_COMPLETED':
     print('Waiting on Query Completion: ' + state)
-    time.sleep(15)
+    await asyncio.sleep(15)
     #gets our updated response
 
     response = get_query_results(execution_id)
@@ -134,13 +134,12 @@ def get_populated_results(response, execution_id, client, query_id):
 
     #adds some time if our query needs time to wait before executing
     if state == 'QUERY_STATE_PENDING':
-      time.sleep(120)
+      await asyncio.sleep(120)
       state = response.json(['state'])
     #if our query has an issue then we cancel the query. Sleep. and we run everything again
     if state != 'QUERY_STATE_COMPLETED' and state != 'QUERY_STATE_EXECUTING':
       cancel_query_execution(execution_id)
       print('Query cancelled and trying again later')
-      time.sleep(86400)
       run_all_networks(client)
 
     if state == 'QUERY_STATE_COMPLETED':
@@ -219,9 +218,9 @@ def make_response_string(data, liquidation_index, network):
       'Total_Aggregate_Profit'
   ]].astype(str)
 
-  print(len(data), data)
-  print(liquidation_index)
-  print(data['Liquidation_Number'][liquidation_index])
+  # print(len(data), data)
+  # print(liquidation_index)
+  # print(data['Liquidation_Number'][liquidation_index])
   response_string_2 = '>>> :rotating_light: [' + network + ' Liquidation #' + data[
       'Liquidation_Number'].iloc[liquidation_index] + ' has occured.](' + data[
           'Tx_Hash_Minimal'].iloc[liquidation_index] + ') :rotating_light:'
@@ -353,7 +352,7 @@ async def send_discord_message(channel, message):
 
 
 #takes in a query_id and gets our query results in a dataframe
-def query_extractor(client, query_id):
+async def query_extractor(client, query_id):
 
   #gets our execution ID
   execution_id = execute_query(query_id, "medium")
@@ -363,7 +362,7 @@ def query_extractor(client, query_id):
 
   response = get_query_results(execution_id)
 
-  data = get_populated_results(response, execution_id, client, query_id)
+  data = await get_populated_results(response, execution_id, client, query_id)
 
   if len(data) < 1:
     #
@@ -419,8 +418,7 @@ async def new_message_handler(data, liquidation_info_df, channel, query_id):
     #gets our message history
     while last_liquidation_sent < current_liquidation_number:
 
-      print('last_liquidation_sent: ' + str(last_liquidation_sent))
-      print('current_liquidation_number: ' + str(current_liquidation_number))
+      print(network + ': ' + str(last_liquidation_sent) + '/' + str(current_liquidation_number))
 
       message = make_response_string(data, last_liquidation_sent, network)
 
@@ -462,7 +460,7 @@ async def query_cooldown(cooldown):
   if current_time >= next_update:
     df['current_time'] = current_time
     # df.to_csv('cooldown.csv', index=False)
-    df_write_to_cloud_storage(df, 'cooldown.csv')
+    df_write_to_cloud_storage(df, 'liquidations.csv')
 
     print('Ready to Update')
     time_for_update = True
@@ -529,7 +527,7 @@ def run_discord_bot():
 
   intents.messages = True
 
-  token = str(os.getenv("DISCORD_TOKEN"))
+  # token = str(os.getenv("DISCORD_TOKEN"))
   client = discord.Client(intents=intents)
 
   #prints when the bot is running and starts run_everything
@@ -541,7 +539,7 @@ def run_discord_bot():
     # await test_run_everything(client)
     await run_all_networks(client)
 
-  client.run(token)
+  client.run(DISCORD_TOKEN)
 
   return
 
@@ -557,7 +555,7 @@ async def run_everything(client, query_id):
 
   channel = client.get_channel(CHANNEL_ID)
 
-  data = query_extractor(client, query_id)
+  data = await query_extractor(client, query_id)
 
   liquidation_info_df = get_liquidation_state_df(data, query_id)
 
@@ -579,7 +577,7 @@ async def run_everything_no_loop(client, query_id):
 
   channel = client.get_channel(CHANNEL_ID)
 
-  data = query_extractor(client, query_id)
+  data = await query_extractor(client, query_id)
 
   liquidation_info_df = get_liquidation_state_df(data, query_id)
 
@@ -600,11 +598,17 @@ async def run_everything_no_loop(client, query_id):
 async def run_all_networks(client):
 
   #makes sure we meet our cooldown requirements first
-  query_cooldown(86400)
+  ready_for_update = await query_cooldown(86400)
 
-  for query_id in QUERY_ID_LIST:
-    print(query_id)
-    await run_everything_no_loop(client, query_id)
+  i = 0
+  if ready_for_update == True:
+    for query_id in QUERY_ID_LIST:
+      print('Queries Complete: ', i, ' / ', len(QUERY_ID_LIST))
+      print(query_id)
+      i += 1
+      await run_everything_no_loop(client, query_id)
+  
+  await asyncio.sleep(15)
   await run_all_networks(client)
   return
 
@@ -632,3 +636,6 @@ async def test_run_everything(client, query_id):
   # time.sleep(25)
 
   return
+
+# df = pd.read_csv('liquidations.csv')
+# df_write_to_cloud_storage(df, 'liquidations.csv')
